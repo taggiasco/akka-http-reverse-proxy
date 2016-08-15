@@ -39,33 +39,24 @@ object ReverseProxy extends Config {
     val serverSource: Source[Http.IncomingConnection, Future[Http.ServerBinding]] = Http().bind(interface = httpInterface, port = httpPort)
     
     
-    val requestHandler: HttpRequest => HttpResponse = {
-      case HttpRequest(GET, Uri.Path("/"), _, _, _) =>
-        HttpResponse(entity = HttpEntity(
-          ContentTypes.`text/html(UTF-8)`,
-          "<html><body>Hello world!</body></html>")
-        )
-      
-      case HttpRequest(GET, Uri.Path("/ping"), _, _, _) =>
-        HttpResponse(entity = "PONG!")
-      
-      case HttpRequest(GET, Uri.Path("/crash"), _, _, _) =>
-        sys.error("BOOM!")
-      
-      case r: HttpRequest =>
-        r.discardEntityBytes() // important to drain incoming HTTP Entity stream
-        HttpResponse(404, entity = "Unknown resource!")
-    }
+    val domain = "127.0.0.1"
     
-    val asyncRequestHandler: HttpRequest => Future[HttpResponse] = {
-      httpRequest => Future.successful(requestHandler(httpRequest))
-    }
+    val connectionFlow = Http().outgoingConnection(domain, 80, log = log)
+    
+    val pipeFlow = Flow[HttpRequest].via(reactToConnectionFailure).mapAsync(1)( _ match {
+      case HttpRequest(method, path, headers, entity, protocol) => {
+        val resp = Source.single(HttpRequest(method, path, headers, entity)).via(connectionFlow).runWith(Sink.head)
+        resp
+      }
+      case _ =>
+        Future.successful(HttpResponse(404, entity = "Unknown request"))
+    })
     
     
     val binding: Future[Http.ServerBinding] = serverSource.via(reactToTopLevelFailures).to(
       Sink.foreach { connection =>
         println("Accepted new connection from " + connection.remoteAddress)
-        connection handleWithAsyncHandler asyncRequestHandler
+        connection handleWith pipeFlow
       }
     ).run()
     
