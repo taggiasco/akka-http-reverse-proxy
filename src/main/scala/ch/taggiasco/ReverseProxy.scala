@@ -5,48 +5,55 @@ import akka.util.ByteString
 import akka.event.{Logging, LoggingAdapter}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl._
-import akka.stream.scaladsl.Flow
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
-import akka.http.scaladsl.server.Directives._
 import scala.io.StdIn
 import scala.concurrent.Future
 
  
-object ReverseProxy extends Config {
+object ReverseProxy extends BaseConfig {
   def main(args: Array[String]) {
     implicit val system = ActorSystem("reverse-proxy")
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
     
     
+    val locats = Locator(this)
+    require(locats.nonEmpty)
+    
+    val locations = locats.map(loc => loc.path -> loc)
+    
+    
     val log: LoggingAdapter = Logging(system, getClass)
     
-    val monitoringActor: ActorRef = system.actorOf(MonitoringActor.props)
     
     val reactToTopLevelFailures = Flow[Http.IncomingConnection].watchTermination()((_, termination) => termination.onFailure {
-      case cause => monitoringActor ! cause
+      case cause => log.error(cause, "Top level failure")
     })
     
     val reactToConnectionFailure = Flow[HttpRequest].recover[HttpRequest] {
       case ex =>
-        // handle the failure somehow
-        monitoringActor ! ex
+        log.error(ex, "Connection failure")
         throw ex
     }
     
     val serverSource: Source[Http.IncomingConnection, Future[Http.ServerBinding]] = Http().bind(interface = httpInterface, port = httpPort)
     
     
-    val domain = "127.0.0.1"
-    
-    val connectionFlow = Http().outgoingConnection(domain, 80, log = log)
-    
-    val pipeFlow = Flow[HttpRequest].via(reactToConnectionFailure).mapAsync(1)( _ match {
+    val pipeToLocatorFlow = Flow[HttpRequest].via(reactToConnectionFailure).mapAsync(1)( _ match {
       case HttpRequest(method, path, headers, entity, protocol) => {
-        val resp = Source.single(HttpRequest(method, path, headers, entity)).via(connectionFlow).runWith(Sink.head)
-        resp
+        
+        locations.find(loc => path.path.startsWith(Uri.Path(loc._1))) match {
+          case Some(locator) =>
+            locator._2.forward(method, path, headers, entity, protocol)
+          case None =>
+            // reverse non defined
+            Future.successful(HttpResponse(404, entity = "Unknown path"))
+        }
+        
+        //val resp = Source.single(HttpRequest(method, path, headers, entity)).via(connectionFlow).runWith(Sink.head)
+        //resp
       }
       case _ =>
         Future.successful(HttpResponse(404, entity = "Unknown request"))
@@ -56,7 +63,7 @@ object ReverseProxy extends Config {
     val binding: Future[Http.ServerBinding] = serverSource.via(reactToTopLevelFailures).to(
       Sink.foreach { connection =>
         println("Accepted new connection from " + connection.remoteAddress)
-        connection handleWith pipeFlow
+        connection handleWith pipeToLocatorFlow
       }
     ).run()
     
