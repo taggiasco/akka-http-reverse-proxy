@@ -1,4 +1,4 @@
-package ch.taggiasco
+package ch.taggiasco.http.proxy
 
 import com.typesafe.config.ConfigFactory
 import scala.collection.JavaConversions._

@@ -1,4 +1,4 @@
-package ch.taggiasco
+package ch.taggiasco.http.proxy
 
 import akka.actor.{ActorSystem, ActorRef}
 import akka.util.ByteString

@@ -1,4 +1,4 @@
-package ch.taggiasco
+package ch.taggiasco.http.proxy
 
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
