@@ -9,7 +9,7 @@ scalaVersion := "2.11.8"
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
 libraryDependencies ++= {
-  val akkaVersion = "2.4.9-RC2"
+  val akkaVersion = "2.4.9"
 
   Seq(
     "com.typesafe.akka" %% "akka-http-experimental"               % akkaVersion,
