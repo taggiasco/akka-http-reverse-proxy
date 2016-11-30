@@ -1,7 +1,7 @@
 package ch.taggiasco.http.proxy
 
 import com.typesafe.config.{Config, ConfigException}
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import akka.stream.ActorMaterializer
 import akka.actor.ActorSystem
 
@@ -26,7 +26,7 @@ object Locator {
     commonHeaders: Map[String, String]
   )(implicit system: ActorSystem, materializer: ActorMaterializer): Locator = {
     val headersConfig = config.getConfig("headers")
-    val headers = headersConfig.entrySet().toList.map(entry => {
+    val headers = headersConfig.entrySet().asScala.map(entry => {
       val key = entry.getKey()
       key -> headersConfig.getString(key)
     }).toMap

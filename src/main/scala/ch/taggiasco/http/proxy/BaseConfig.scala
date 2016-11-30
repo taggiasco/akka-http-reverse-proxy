@@ -1,7 +1,7 @@
 package ch.taggiasco.http.proxy
 
 import com.typesafe.config.ConfigFactory
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 
 trait BaseConfig {
@@ -15,11 +15,11 @@ trait BaseConfig {
   
   private val headersConfig = reverseConfig.getConfig("headers")
   
-  val headers = headersConfig.entrySet().toList.map(entry => {
+  val headers = headersConfig.entrySet().asScala.map(entry => {
     val key = entry.getKey()
     key -> headersConfig.getString(key)
   }).toMap
   
-  val locations = reverseConfig.getConfigList("locations").toList
+  val locations = reverseConfig.getConfigList("locations").asScala.toList
   
 }

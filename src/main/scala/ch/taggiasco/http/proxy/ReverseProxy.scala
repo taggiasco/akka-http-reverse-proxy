@@ -10,6 +10,7 @@ import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.HttpMethods._
 import scala.io.StdIn
 import scala.concurrent.Future
+import scala.util.Failure
 
  
 object ReverseProxy extends BaseConfig {
@@ -28,8 +29,9 @@ object ReverseProxy extends BaseConfig {
     val log: LoggingAdapter = Logging(system, getClass)
     
     
-    val reactToTopLevelFailures = Flow[Http.IncomingConnection].watchTermination()((_, termination) => termination.onFailure {
-      case cause => log.error(cause, "Top level failure")
+    val reactToTopLevelFailures = Flow[Http.IncomingConnection].watchTermination()((_, termination) => termination.onComplete {
+      case Failure(cause) => log.error(cause, "Top level failure")
+      case _ =>
     })
     
     val reactToConnectionFailure = Flow[HttpRequest].recover[HttpRequest] {
@@ -70,8 +72,9 @@ object ReverseProxy extends BaseConfig {
     println(s"Server online at http://$httpInterface:$httpPort\nPress RETURN to stop...")
     StdIn.readLine() // let it run until user presses return
     
-    binding.onFailure{
-      case ex: Exception => log.error(ex, "Failed to bind to {}:{}!", httpInterface, httpPort)
+    binding.onComplete{
+      case Failure(ex) => log.error(ex, "Failed to bind to {}:{}!", httpInterface, httpPort)
+      case _ =>
     }
     binding
       .flatMap(_.unbind()) // trigger unbinding from the port
