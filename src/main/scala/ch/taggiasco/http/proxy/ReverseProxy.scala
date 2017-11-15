@@ -11,6 +11,7 @@ import akka.http.scaladsl.model.HttpMethods._
 import scala.io.StdIn
 import scala.concurrent.Future
 import scala.util.Failure
+import akka.http.scaladsl.server.directives.DebuggingDirectives
 
  
 object ReverseProxy extends BaseConfig {
@@ -45,10 +46,10 @@ object ReverseProxy extends BaseConfig {
     
     val pipeToLocatorFlow = Flow[HttpRequest].via(reactToConnectionFailure).mapAsync(1)( _ match {
       case HttpRequest(method, path, headers, entity, protocol) => {
-        
         locations.find(loc => path.path.startsWith(Uri.Path(loc._1))) match {
           case Some(locator) =>
             locator._2.forward(method, path, headers, entity, protocol)
+            // forward
           case None =>
             // reverse non defined
             Future.successful(HttpResponse(404, entity = "Unknown path"))
