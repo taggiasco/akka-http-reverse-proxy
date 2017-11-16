@@ -11,6 +11,9 @@ import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
 import akka.http.scaladsl.model.Uri.Host
 import akka.http.scaladsl.model.Uri.ParsingMode
+import akka.event.LoggingAdapter
+import com.typesafe.sslconfig.akka.AkkaSSLConfig
+import com.typesafe.sslconfig.akka.AkkaSSLConfig
 
 
 trait Route {
@@ -20,14 +23,38 @@ trait Route {
   val port:   Int
   val secure: Boolean
   val prefix: String
+  val headers: Map[String, String]
+  val testOnStart: Boolean
   
   val system: ActorSystem
   val materializer: ActorMaterializer
+  val logger: LoggingAdapter
   
   
   private val defaultCharset = java.nio.charset.Charset.defaultCharset()
   
-  private val connectionFlow = Http()(system).outgoingConnection(server, port)
+  private val connectionFlow = {
+    if(secure) {
+      Http()(system).outgoingConnectionHttps(server, port, log = logger)
+    } else {
+      Http()(system).outgoingConnection(server, port, log = logger)
+    }
+  }
+  
+  
+  def test() {
+    if(testOnStart) {
+      logger.info(s"Test : starting test for locator on $path")
+      Source
+        .single(HttpRequest(HttpMethods.GET, Uri("/")))
+        .via(connectionFlow)
+        .runWith(Sink.head)(materializer)
+        .map(resp => {
+          logger.info(s"Result : end of test for locator on $path with status : ${resp.status}")
+          resp
+        })(system.dispatcher)
+    }
+  }
   
   
   
@@ -50,11 +77,12 @@ trait Route {
     val scheme = if(secure) { "https" } else { "http" }
     val host = Host(server, defaultCharset, ParsingMode.Strict)
     val authority = originUri.authority.copy(host, port)
-    originUri.copy(path = Uri.Path(prefix + "/" + removeFromPath(originUri.path, path)), authority = authority)
+    originUri.copy(scheme = scheme, path = Uri.Path(prefix + "/" + removeFromPath(originUri.path, path)), authority = authority)
   }
   
   
   def forward(
+    requestId:      String,
     originMethod:   HttpMethod,
     originUri:      Uri,
     originHeaders:  Seq[HttpHeader],
@@ -62,12 +90,15 @@ trait Route {
     originProtocol: HttpProtocol
   ): Future[HttpResponse] = {
     val uri = buildURI(originUri)
-    //println("URI : " + uri)
+    logger.info(s"Request $requestId : URI is : $uri")
     Source
-      .single(HttpRequest(originMethod, uri, originHeaders, originEntity))
+      .single(HttpRequest(originMethod, uri, originHeaders, originEntity, originProtocol))
       .via(connectionFlow)
       .runWith(Sink.head)(materializer)
-      .map(resp => resp)(system.dispatcher)
+      .map(resp => {
+        logger.info(s"Response for request $requestId is : ${resp.status}")
+        resp
+      })(system.dispatcher)
   }
   
   

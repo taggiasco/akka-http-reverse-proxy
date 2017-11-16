@@ -19,15 +19,16 @@ object ReverseProxy extends BaseConfig {
     implicit val system = ActorSystem("reverse-proxy")
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
-    
+    implicit val log: LoggingAdapter = Logging(system, getClass)
     
     val locats = Locator(this)
     require(locats.nonEmpty)
     
     val locations = locats.map(loc => loc.path -> loc)
     
+    locations.foreach(loc => loc._2.test())
     
-    val log: LoggingAdapter = Logging(system, getClass)
+    val idGenerator = scala.util.Random.alphanumeric
     
     
     val reactToTopLevelFailures = Flow[Http.IncomingConnection].watchTermination()((_, termination) => termination.onComplete {
@@ -46,12 +47,15 @@ object ReverseProxy extends BaseConfig {
     
     val pipeToLocatorFlow = Flow[HttpRequest].via(reactToConnectionFailure).mapAsync(1)( _ match {
       case HttpRequest(method, path, headers, entity, protocol) => {
+        log.info(s"Path is : ${path.path}")
         locations.find(loc => path.path.startsWith(Uri.Path(loc._1))) match {
           case Some(locator) =>
-            locator._2.forward(method, path, headers, entity, protocol)
-            // forward
+            val requestId = idGenerator.take(32).mkString("")
+            log.info(s"Locator found : ${locator._2} for request id : $requestId")
+            locator._2.forward(requestId, method, path, headers, entity, protocol)
           case None =>
             // reverse non defined
+            log.info(s"Locator not found")
             Future.successful(HttpResponse(404, entity = "Unknown path"))
         }
         

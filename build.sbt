@@ -4,13 +4,13 @@ organization := "ch.taggiasco"
 
 version := "0.0.2"
 
-scalaVersion := "2.12.0"
+scalaVersion := "2.12.3"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
 libraryDependencies ++= {
-  val akkaVersion     = "2.4.14"
-  val akkaHttpVersion = "10.0.0"
+  val akkaVersion     = "2.5.4"
+  val akkaHttpVersion = "10.0.10"
 
   Seq(
     "com.typesafe.akka" %% "akka-http-core"     % akkaHttpVersion,

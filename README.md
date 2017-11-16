@@ -4,6 +4,8 @@
 
 This project is about developing a reverse proxy with Akka (HTTP and Streams).
 
+**Still on work !**
+
 
 
 ## Usage
