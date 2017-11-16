@@ -18,24 +18,31 @@ import com.typesafe.sslconfig.akka.AkkaSSLConfig
 
 trait Route {
   
-  val path:   String
-  val server: String
-  val port:   Int
-  val secure: Boolean
-  val prefix: String
-  val headers: Map[String, String]
+  val path:        String
+  val server:      String
+  val port:        Int
+  val secure:      Boolean
+  val loosySSL:    Boolean
+  val prefix:      String
+  val headers:     Map[String, String]
   val testOnStart: Boolean
   
-  val system: ActorSystem
+  val system:       ActorSystem
   val materializer: ActorMaterializer
-  val logger: LoggingAdapter
+  val logger:       LoggingAdapter
   
   
   private val defaultCharset = java.nio.charset.Charset.defaultCharset()
   
   private val connectionFlow = {
     if(secure) {
-      Http()(system).outgoingConnectionHttps(server, port, log = logger)
+      if(loosySSL) {
+        val badSslConfig = AkkaSSLConfig()(system).mapSettings(s => s.withLoose(s.loose.withDisableSNI(true)))
+        val badCtx = Http()(system).createClientHttpsContext(badSslConfig)
+        Http()(system).outgoingConnectionHttps(server, port, log = logger, connectionContext = badCtx)
+      } else {
+        Http()(system).outgoingConnectionHttps(server, port, log = logger)
+      }
     } else {
       Http()(system).outgoingConnection(server, port, log = logger)
     }

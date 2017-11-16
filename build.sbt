@@ -4,7 +4,7 @@ organization := "ch.taggiasco"
 
 version := "0.0.2"
 
-scalaVersion := "2.12.3"
+scalaVersion := "2.12.4"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
